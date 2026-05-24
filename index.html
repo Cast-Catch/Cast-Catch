@@ -1,0 +1,761 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no"/>
+  <meta name="theme-color" content="#0a1628"/>
+  <meta name="apple-mobile-web-app-capable" content="yes"/>
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+  <meta name="apple-mobile-web-app-title" content="Cast &amp; Catch"/>
+  <meta name="mobile-web-app-capable" content="yes"/>
+  <title>Cast &amp; Catch</title>
+  <link rel="manifest" href="./manifest.json"/>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;900&family=Source+Serif+4:ital,opsz,wght@0,8..60,300;0,8..60,400;1,8..60,300&display=swap"/>
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+    :root{
+      --bg:#000;--surface:#0a1628;--border:rgba(94,168,195,0.18);
+      --accent:#5ea8c3;--accent2:#a8d8ea;--text:#e8dcc8;--text2:#b8ccda;
+      --muted:#5e7d96;--gold:#d4c4a8;
+      --safe-top:env(safe-area-inset-top,0px);--safe-bottom:env(safe-area-inset-bottom,0px);
+      --nav-h:calc(64px + var(--safe-bottom));--header-h:calc(72px + var(--safe-top));
+      --radius:16px;--font-body:'Source Serif 4',Georgia,serif;
+      --font-display:'Playfair Display',Georgia,serif;
+      --transition:0.18s cubic-bezier(0.4,0,0.2,1);
+    }
+    html,body{width:100%;height:100%;background:var(--bg);color:var(--text);font-family:var(--font-body);font-size:16px;line-height:1.5;overflow:hidden;-webkit-overflow-scrolling:touch}
+    #app{width:100%;height:100%;display:flex;flex-direction:column;position:relative;max-width:430px;margin:0 auto}
+    .water-bg{position:fixed;inset:0;background:radial-gradient(ellipse at 20% 0%,rgba(14,45,80,0.6) 0%,transparent 60%),linear-gradient(180deg,#000 0%,#060f1e 30%,#091828 60%,#050e1c 100%);z-index:0;pointer-events:none}
+    .ripple-layer{position:fixed;bottom:0;left:0;right:0;height:160px;background:repeating-linear-gradient(0deg,transparent,transparent 14px,rgba(94,168,195,0.03) 14px,rgba(94,168,195,0.03) 16px);animation:ripple 10s linear infinite;z-index:0;pointer-events:none}
+    @keyframes ripple{0%{transform:translateY(0)}100%{transform:translateY(-16px)}}
+    header{position:relative;z-index:20;padding:calc(var(--safe-top) + 12px) 20px 0;text-align:center;height:var(--header-h);display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(0,0,0,0.95) 0%,rgba(0,0,0,0.7) 100%);border-bottom:1px solid var(--border)}
+    header h1{font-family:var(--font-display);font-size:clamp(20px,6vw,26px);font-weight:900;color:var(--gold);letter-spacing:-0.5px;line-height:1}
+    header h1 span{color:var(--accent)}
+    header p{font-size:10px;color:var(--muted);letter-spacing:2px;text-transform:uppercase;margin-top:2px;font-style:italic}
+    .api-btn{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:rgba(94,168,195,0.12);border:1px solid rgba(94,168,195,0.3);border-radius:8px;padding:6px 10px;color:var(--accent2);font-size:11px;cursor:pointer;line-height:1}
+    nav{position:fixed;bottom:0;left:0;right:0;height:var(--nav-h);padding-bottom:var(--safe-bottom);background:rgba(0,0,0,0.96);border-top:1px solid var(--border);display:flex;align-items:flex-start;z-index:100;backdrop-filter:blur(20px)}
+    .nav-inner{display:flex;width:100%;padding-top:6px}
+    .nav-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 4px;background:none;border:none;cursor:pointer;color:var(--muted);font-family:var(--font-body);font-size:9.5px;font-style:italic;min-height:44px;position:relative;transition:color var(--transition)}
+    .nav-btn .ni{font-size:22px;line-height:1;transition:transform var(--transition)}
+    .nav-btn.active{color:var(--accent2)}
+    .nav-btn.active .ni{transform:scale(1.15)}
+    .nav-btn.active::before{content:'';position:absolute;top:0;left:50%;transform:translateX(-50%);width:32px;height:3px;background:var(--accent);border-radius:0 0 3px 3px}
+    .nav-btn:active .ni{transform:scale(0.92)}
+    main{position:relative;z-index:10;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding-bottom:var(--nav-h);scrollbar-width:none}
+    main::-webkit-scrollbar{display:none}
+    .panel{display:none;padding:20px 18px;min-height:calc(100vh - var(--header-h) - var(--nav-h));animation:panelIn 0.22s cubic-bezier(0.4,0,0.2,1)}
+    .panel.active{display:block}
+    @keyframes panelIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
+    .sec-title{font-family:var(--font-display);font-size:clamp(18px,5vw,22px);color:var(--gold);margin-bottom:4px;line-height:1.2}
+    .sec-sub{font-size:13px;color:var(--muted);font-style:italic;margin-bottom:18px}
+    .card{background:rgba(9,24,45,0.85);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px}
+    .btn{width:100%;padding:16px;border-radius:14px;border:none;cursor:pointer;font-family:var(--font-body);font-size:15px;font-style:italic;transition:all var(--transition);margin-top:12px;min-height:52px;display:flex;align-items:center;justify-content:center;gap:8px}
+    .btn-primary{background:linear-gradient(135deg,#1a5a7a,var(--accent));color:#f0f8ff}
+    .btn-primary:active{transform:scale(0.98)}
+    .btn-primary:disabled{opacity:0.45}
+    .btn-ghost{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--muted);font-size:13px;padding:12px;margin-top:8px}
+    .field{margin-bottom:14px}
+    .field label{display:block;font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:6px}
+    .field input,.field select,.field textarea{width:100%;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:10px;padding:13px 14px;color:var(--text);font-family:var(--font-body);font-size:15px;font-style:italic;outline:none;min-height:50px;-webkit-appearance:none;appearance:none;transition:border-color var(--transition)}
+    .field textarea{height:80px;resize:none;min-height:unset}
+    .field input:focus,.field select:focus,.field textarea:focus{border-color:rgba(94,168,195,0.6);background:rgba(94,168,195,0.04)}
+    .field select option{background:#0d2040}
+    .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .ai-result{margin-top:16px;background:rgba(94,168,195,0.06);border:1px solid rgba(94,168,195,0.22);border-radius:var(--radius);padding:18px;animation:panelIn 0.3s ease}
+    .ai-result h3{font-family:var(--font-display);font-size:15px;color:var(--accent2);margin-bottom:10px}
+    .ai-result p{font-size:14px;color:var(--text2);line-height:1.75;white-space:pre-wrap}
+    .error-box{margin-top:16px;background:rgba(201,122,122,0.08);border:1px solid rgba(201,122,122,0.3);border-radius:var(--radius);padding:16px;color:#e09090;font-size:13px;font-style:italic;line-height:1.6}
+    .loading{display:flex;align-items:center;justify-content:center;gap:8px;padding:24px;color:var(--accent);font-style:italic;font-size:14px}
+    .dot{width:7px;height:7px;border-radius:50%;background:var(--accent);animation:bounce 1.2s infinite}
+    .dot:nth-child(2){animation-delay:0.2s}.dot:nth-child(3){animation-delay:0.4s}
+    @keyframes bounce{0%,80%,100%{transform:scale(0.7);opacity:0.4}40%{transform:scale(1.2);opacity:1}}
+    .upload-zone{border:2px dashed rgba(94,168,195,0.28);border-radius:var(--radius);padding:44px 20px;text-align:center;cursor:pointer;background:rgba(94,168,195,0.02);position:relative}
+    .upload-zone:active{border-color:rgba(94,168,195,0.7);background:rgba(94,168,195,0.07)}
+    .upload-zone input{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+    .upload-icon{font-size:52px;margin-bottom:10px;line-height:1}
+    .upload-text{font-size:14px;color:var(--muted);font-style:italic}
+    .upload-text strong{color:var(--accent);font-style:normal}
+    .preview-img{width:100%;border-radius:12px;max-height:240px;object-fit:cover;margin-bottom:14px;border:1px solid var(--border)}
+    .stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:20px}
+    .stat-box{background:rgba(94,168,195,0.06);border:1px solid var(--border);border-radius:14px;padding:14px 8px;text-align:center}
+    .stat-num{font-family:var(--font-display);font-size:26px;color:var(--accent);display:block}
+    .stat-label{font-size:9.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1.2px;font-style:italic}
+    .divider{border:none;border-top:1px solid rgba(94,168,195,0.1);margin:18px 0}
+    .empty{text-align:center;padding:40px 20px;color:var(--muted);font-style:italic}
+    .empty .icon{font-size:48px;margin-bottom:12px}
+    .map-wrap{width:100%;height:clamp(300px,44vh,420px);border-radius:14px;overflow:hidden;border:1px solid rgba(94,168,195,0.25);position:relative;margin-bottom:12px;background:#050e1c}
+    #fishing-map{width:100%;height:100%}
+    .gps-bar{display:flex;align-items:center;gap:12px;background:rgba(9,24,45,0.9);border:1px solid var(--border);border-radius:12px;padding:12px 14px;margin-bottom:10px}
+    .gps-dot{width:11px;height:11px;border-radius:50%;background:var(--muted);flex-shrink:0;transition:background var(--transition)}
+    .gps-dot.live{background:#4caf7d;box-shadow:0 0 10px rgba(76,175,125,0.55);animation:pulse 2s infinite}
+    .gps-dot.seeking{background:#f0c040;animation:pulse 0.7s infinite}
+    @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.4);opacity:0.6}}
+    .gps-info{flex:1}
+    .gps-label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1.5px;font-style:italic}
+    .gps-coords{font-size:12px;color:var(--accent2);margin-top:2px;font-style:italic}
+    .gps-actions{display:flex;gap:6px}
+    .gps-btn{padding:8px 12px;border-radius:9px;border:1px solid rgba(94,168,195,0.3);background:rgba(94,168,195,0.1);color:var(--accent2);font-size:12px;cursor:pointer;font-family:var(--font-body);white-space:nowrap;min-height:36px;transition:all var(--transition)}
+    .gps-btn:disabled{opacity:0.35;cursor:not-allowed}
+    .layer-row{display:flex;gap:7px;margin-bottom:10px;flex-wrap:wrap}
+    .layer-btn{flex:1;min-width:60px;padding:9px 6px;border-radius:10px;border:1px solid var(--border);background:rgba(255,255,255,0.03);color:var(--muted);font-size:11px;font-family:var(--font-body);font-style:italic;cursor:pointer;text-align:center;min-height:40px;transition:all var(--transition)}
+    .layer-btn.on{background:rgba(94,168,195,0.15);border-color:rgba(94,168,195,0.5);color:var(--accent2)}
+    .nav-panel{background:rgba(9,24,45,0.9);border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px}
+    .nav-panel h4{font-family:var(--font-display);font-size:14px;color:var(--accent2);margin-bottom:8px}
+    .nav-panel p{font-size:12px;color:var(--muted);font-style:italic;line-height:1.65}
+    .nav-panel a{color:var(--accent);text-decoration:none}
+    .nav-key-row{display:flex;gap:8px;margin-top:10px}
+    .nav-key-input{flex:1;background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:9px;padding:10px 12px;color:var(--text);font-family:var(--font-body);font-size:13px;outline:none;min-height:42px}
+    .nav-apply{padding:10px 14px;border-radius:9px;border:none;background:linear-gradient(135deg,#1a5a7a,var(--accent));color:#f0f8ff;font-size:13px;cursor:pointer;font-family:var(--font-body);white-space:nowrap;min-height:42px}
+    .wp-list{margin-top:10px}
+    .wp-lbl{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:8px;font-style:italic}
+    .wp-item{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;background:rgba(255,255,255,0.03);border:1px solid rgba(94,168,195,0.1);border-radius:11px;margin-bottom:6px}
+    .wp-name{font-size:13px;color:var(--gold);font-style:italic}
+    .wp-pos{font-size:11px;color:var(--muted);margin-top:2px}
+    .wp-del{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px 6px;min-width:32px;min-height:32px}
+    .catch-top{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:5px}
+    .catch-fish{font-family:var(--font-display);font-size:16px;color:var(--gold)}
+    .catch-w{font-size:13px;color:var(--accent);font-style:italic}
+    .catch-meta{font-size:12px;color:var(--muted);font-style:italic;margin-bottom:3px}
+    .catch-notes{font-size:13px;color:#8aa4b8;font-style:italic}
+    .del-btn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;padding:4px 6px;min-width:32px;min-height:32px}
+    /* Modal overlay */
+    .modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.88);z-index:9999;align-items:center;justify-content:center;padding:20px}
+    .modal-overlay.show{display:flex}
+    .modal-box{background:#0a1628;border:1px solid rgba(94,168,195,0.3);border-radius:20px;padding:28px;width:100%;max-width:400px}
+    .modal-title{font-family:var(--font-display);font-size:20px;color:var(--gold);margin-bottom:8px}
+    .modal-sub{font-size:13px;color:var(--muted);font-style:italic;line-height:1.65;margin-bottom:18px}
+    .modal-sub a{color:var(--accent);text-decoration:none}
+    .modal-input{width:100%;background:rgba(255,255,255,0.05);border:1px solid rgba(94,168,195,0.25);border-radius:10px;padding:13px 14px;color:var(--text);font-size:14px;outline:none;font-family:monospace;margin-bottom:10px}
+    .modal-error{display:none;color:#c97a7a;font-size:12px;font-style:italic;margin-bottom:10px}
+    .modal-status{font-size:12px;margin-bottom:14px;font-style:italic;min-height:18px}
+    /* Leaflet overrides */
+    .leaflet-container{background:#050e1c!important}
+    .leaflet-tile{filter:saturate(0.8) brightness(0.85)}
+    .fish-pin{border-radius:50%;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 12px rgba(0,0,0,0.7)}
+    .leaflet-popup-content-wrapper{background:rgba(5,15,30,0.97)!important;border:1px solid rgba(94,168,195,0.3)!important;border-radius:12px!important;color:var(--text)!important;font-family:var(--font-body)!important}
+    .leaflet-popup-tip{background:rgba(5,15,30,0.97)!important}
+    .leaflet-popup-content{font-size:13px;line-height:1.6;color:var(--text);margin:10px 14px!important}
+    .leaflet-popup-content b{color:var(--accent2);font-family:var(--font-display)}
+    .leaflet-control-zoom a{background:rgba(5,15,30,0.95)!important;border-color:rgba(94,168,195,0.25)!important;color:var(--accent2)!important;font-size:18px!important;width:36px!important;height:36px!important;line-height:34px!important}
+    .leaflet-control-attribution{background:rgba(5,15,30,0.75)!important;color:#3a5a70!important;font-size:8px!important}
+    .you-ring{border-radius:50%;width:20px;height:20px;background:#4caf7d;border:3px solid #fff;box-shadow:0 0 0 5px rgba(76,175,125,0.25),0 3px 12px rgba(0,0,0,0.6);animation:pulse 2s infinite}
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="water-bg"></div>
+  <div class="ripple-layer"></div>
+
+  <header>
+    <h1>Cast<span>&amp;</span>Catch</h1>
+    <p>AI Companion · GPS · Navionics</p>
+    <button class="api-btn" onclick="openApiModal()">⚙️ API Key</button>
+  </header>
+
+  <!-- API Key Modal -->
+  <div class="modal-overlay" id="api-modal">
+    <div class="modal-box">
+      <div class="modal-title">🔑 Anthropic API Key</div>
+      <div class="modal-sub">
+        Required for Fish Identifier, Spot Finder, Conditions Advisor and Catch Insights.
+        Get a free key at <a href="https://console.anthropic.com" target="_blank">console.anthropic.com</a>
+        → API Keys → Create Key. Your key is stored only on this device.
+      </div>
+      <label style="display:block;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1.8px;margin-bottom:6px">Your API Key</label>
+      <input class="modal-input" id="api-key-input" type="password" placeholder="sk-ant-api03-..."/>
+      <div class="modal-error" id="api-key-error">⚠️ Key must start with "sk-ant-" — check and try again.</div>
+      <div class="modal-status" id="api-key-status"></div>
+      <button class="btn btn-primary" style="margin-top:0" onclick="saveApiKey()">Save &amp; Continue</button>
+      <button class="btn btn-ghost" onclick="closeApiModal()">Cancel</button>
+    </div>
+  </div>
+
+  <main id="main-scroll">
+
+    <!-- IDENTIFY -->
+    <section class="panel active" id="panel-identify">
+      <div class="sec-title">Fish Identifier</div>
+      <div class="sec-sub">Upload a photo for AI species ID</div>
+      <div class="upload-zone" id="upload-zone">
+        <input type="file" accept="image/*" id="fish-file"/>
+        <div class="upload-icon">📷</div>
+        <div class="upload-text"><strong>Tap to choose</strong> a photo from<br/>your gallery or take a new one</div>
+      </div>
+      <img id="fish-preview" class="preview-img" style="display:none"/>
+      <button class="btn btn-ghost" id="retake-btn" style="display:none" onclick="resetPhoto()">↩ Different photo</button>
+      <button class="btn btn-primary" id="identify-btn" style="display:none" onclick="identifyFish()">🔍 Identify This Fish</button>
+      <div class="loading" id="identify-loading" style="display:none">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Analyzing your catch…</span>
+      </div>
+      <div class="ai-result" id="identify-result" style="display:none">
+        <h3>🐠 Identification Results</h3>
+        <p id="identify-text"></p>
+      </div>
+      <div class="error-box" id="identify-error" style="display:none"></div>
+    </section>
+
+    <!-- SPOTS -->
+    <section class="panel" id="panel-spots">
+      <div class="sec-title">Spot Finder</div>
+      <div class="sec-sub">AI-powered location recommendations</div>
+      <div class="field">
+        <label>Your Location</label>
+        <input type="text" id="spot-location" placeholder="e.g. Lake Tahoe, CA" autocomplete="off"/>
+      </div>
+      <div class="field">
+        <label>Target Species</label>
+        <select id="spot-species">
+          <option value="any">Any species</option>
+          <option value="bass">Bass (Largemouth / Smallmouth)</option>
+          <option value="trout">Trout</option>
+          <option value="salmon">Salmon</option>
+          <option value="walleye">Walleye</option>
+          <option value="pike">Pike / Muskie</option>
+          <option value="catfish">Catfish</option>
+          <option value="crappie">Crappie / Panfish</option>
+          <option value="striped bass">Striped Bass</option>
+          <option value="redfish">Redfish</option>
+          <option value="snook">Snook</option>
+          <option value="tuna">Tuna</option>
+        </select>
+      </div>
+      <button class="btn btn-primary" id="spots-btn" onclick="findSpots()">📍 Find Fishing Spots</button>
+      <div class="loading" id="spots-loading" style="display:none">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Scouting the waters…</span>
+      </div>
+      <div class="ai-result" id="spots-result" style="display:none">
+        <h3>📍 Spot Recommendations</h3>
+        <p id="spots-text"></p>
+      </div>
+      <div class="error-box" id="spots-error" style="display:none"></div>
+    </section>
+
+    <!-- CHART -->
+    <section class="panel" id="panel-chart">
+      <div class="sec-title">Marine Chart</div>
+      <div class="sec-sub">Tap map to drop waypoints</div>
+      <div class="gps-bar">
+        <div class="gps-dot" id="gps-dot"></div>
+        <div class="gps-info">
+          <div class="gps-label" id="gps-label">GPS · Not tracking</div>
+          <div class="gps-coords" id="gps-coords" style="display:none"></div>
+        </div>
+        <div class="gps-actions">
+          <button class="gps-btn" id="gps-center-btn" style="display:none" onclick="centerOnMe()">📡 Center</button>
+          <button class="gps-btn" id="gps-main-btn" onclick="toggleGps()">📡 Locate Me</button>
+        </div>
+      </div>
+      <div class="map-wrap">
+        <div id="fishing-map"></div>
+      </div>
+      <div class="layer-row">
+        <button class="layer-btn on" id="lbtn-osm" onclick="switchLayer('osm',this)">🗺️ Street</button>
+        <button class="layer-btn" id="lbtn-satellite" onclick="switchLayer('satellite',this)">🛰️ Satellite</button>
+        <button class="layer-btn" id="lbtn-seamap" onclick="switchLayer('seamap',this)">⚓ Nautical</button>
+        <button class="layer-btn" id="lbtn-depth" onclick="switchLayer('depth',this)">📊 Depth</button>
+        <button class="layer-btn" id="lbtn-navionics" style="display:none" onclick="switchLayer('navionics',this)">🔵 Navionics</button>
+      </div>
+      <div class="nav-panel">
+        <h4>🔵 Navionics by Garmin</h4>
+        <div id="nav-active-msg" style="display:none"><p>✅ Navionics HD charts active — bathymetry, SonarCharts™ and nautical data overlaid.</p></div>
+        <div id="nav-setup">
+          <p>Premium HD nautical charts from Navionics (Garmin). Get a free API key at <a href="https://developer.garmin.com/marine-charts/web/" target="_blank">developer.garmin.com</a>, then paste it below.</p>
+          <div class="nav-key-row">
+            <input class="nav-key-input" id="nav-key-input" placeholder="Paste your Navionics navKey…"/>
+            <button class="nav-apply" onclick="activateNavionics()">Activate</button>
+          </div>
+        </div>
+      </div>
+      <div class="wp-list" id="wp-list" style="display:none">
+        <div class="wp-lbl">Dropped Waypoints</div>
+        <div id="wp-items"></div>
+      </div>
+    </section>
+
+    <!-- LOG -->
+    <section class="panel" id="panel-log">
+      <div class="sec-title">Catch Log</div>
+      <div class="sec-sub">Track your fishing history</div>
+      <div class="stats-row">
+        <div class="stat-box"><span class="stat-num" id="stat-total">0</span><span class="stat-label">Catches</span></div>
+        <div class="stat-box"><span class="stat-num" id="stat-species">0</span><span class="stat-label">Species</span></div>
+        <div class="stat-box"><span class="stat-num" id="stat-spots">0</span><span class="stat-label">Spots</span></div>
+      </div>
+      <button class="btn btn-primary" id="log-form-toggle" onclick="toggleLogForm()">+ Log a Catch</button>
+      <div class="card" id="log-form" style="display:none;margin-top:14px">
+        <div style="font-family:var(--font-display);font-size:15px;color:var(--accent2);margin-bottom:14px">🎣 New Catch</div>
+        <div class="field-row">
+          <div class="field"><label>Species *</label><input id="lf-fish" placeholder="Bass"/></div>
+          <div class="field"><label>Weight</label><input id="lf-weight" placeholder="2.4 lbs"/></div>
+        </div>
+        <div class="field"><label>Location</label><input id="lf-loc" placeholder="Lake or river"/></div>
+        <div class="field"><label>Notes</label><textarea id="lf-notes" placeholder="Bait, conditions, technique…"></textarea></div>
+        <button class="btn btn-primary" style="margin-top:8px" onclick="saveCatch()">Save Catch</button>
+      </div>
+      <hr class="divider"/>
+      <div id="catch-list"></div>
+      <div id="log-insights-section" style="display:none">
+        <hr class="divider"/>
+        <button class="btn btn-primary" onclick="getLogInsights()">✨ Get AI Insights</button>
+        <div class="loading" id="insights-loading" style="display:none">
+          <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+          <span>Analyzing patterns…</span>
+        </div>
+        <div class="ai-result" id="insights-result" style="display:none">
+          <h3>📊 Fishing Insights</h3><p id="insights-text"></p>
+        </div>
+        <div class="error-box" id="insights-error" style="display:none"></div>
+      </div>
+    </section>
+
+    <!-- CONDITIONS -->
+    <section class="panel" id="panel-conditions">
+      <div class="sec-title">Conditions Advisor</div>
+      <div class="sec-sub">Real-time tactics for today's water</div>
+      <div class="field-row">
+        <div class="field"><label>Season</label>
+          <select id="cond-season"><option value="spring">Spring</option><option value="summer">Summer</option><option value="fall">Fall</option><option value="winter">Winter</option></select></div>
+        <div class="field"><label>Time of Day</label>
+          <select id="cond-time"><option value="early morning">Early Morning</option><option value="morning">Morning</option><option value="midday">Midday</option><option value="afternoon">Afternoon</option><option value="evening">Evening</option><option value="night">Night</option></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Weather</label>
+          <select id="cond-weather"><option value="sunny">Sunny</option><option value="partly cloudy">Partly Cloudy</option><option value="overcast">Overcast</option><option value="light rain">Light Rain</option><option value="after rain">After Rain</option><option value="stormy">Stormy</option></select></div>
+        <div class="field"><label>Wind</label>
+          <select id="cond-wind"><option value="calm">Calm</option><option value="light">Light Breeze</option><option value="moderate">Moderate</option><option value="strong">Strong</option></select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Water Clarity</label>
+          <select id="cond-clarity"><option value="crystal clear">Crystal Clear</option><option value="clear">Clear</option><option value="slightly stained">Slightly Stained</option><option value="murky">Murky</option><option value="muddy">Muddy</option></select></div>
+        <div class="field"><label>Air Temp °F</label><input type="number" id="cond-temp" placeholder="68"/></div>
+      </div>
+      <button class="btn btn-primary" onclick="getCondTips()">🌊 Get Fishing Tips</button>
+      <div class="loading" id="cond-loading" style="display:none">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+        <span>Reading the water…</span>
+      </div>
+      <div class="ai-result" id="cond-result" style="display:none">
+        <h3>🌊 Today's Conditions Advice</h3><p id="cond-text"></p>
+      </div>
+      <div class="error-box" id="cond-error" style="display:none"></div>
+    </section>
+
+  </main>
+
+  <nav>
+    <div class="nav-inner">
+      <button class="nav-btn active" onclick="switchTab('identify',this)"><span class="ni">🐟</span>Identify</button>
+      <button class="nav-btn" onclick="switchTab('spots',this)"><span class="ni">📍</span>Spots</button>
+      <button class="nav-btn" onclick="switchTab('chart',this)"><span class="ni">🗺️</span>Chart</button>
+      <button class="nav-btn" onclick="switchTab('log',this)"><span class="ni">📒</span>Log</button>
+      <button class="nav-btn" onclick="switchTab('conditions',this)"><span class="ni">🌊</span>Conditions</button>
+    </div>
+  </nav>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+'use strict';
+
+// ── API Key ───────────────────────────────────────────────────────────────────
+function getApiKey(){ return localStorage.getItem('cc_apikey') || ''; }
+
+function openApiModal(){
+  document.getElementById('api-key-input').value = getApiKey();
+  document.getElementById('api-key-error').style.display = 'none';
+  document.getElementById('api-key-status').textContent =
+    getApiKey() ? '✅ Key currently saved — update below if needed' : '';
+  document.getElementById('api-modal').classList.add('show');
+}
+
+function closeApiModal(){ document.getElementById('api-modal').classList.remove('show'); }
+
+function saveApiKey(){
+  const key = document.getElementById('api-key-input').value.trim();
+  if (!key.startsWith('sk-ant-')){
+    document.getElementById('api-key-error').style.display = 'block';
+    return;
+  }
+  localStorage.setItem('cc_apikey', key);
+  document.getElementById('api-key-error').style.display = 'none';
+  document.getElementById('api-key-status').textContent = '✅ Saved!';
+  setTimeout(closeApiModal, 800);
+}
+
+// Close modal on backdrop tap
+document.getElementById('api-modal').addEventListener('click', function(e){
+  if (e.target === this) closeApiModal();
+});
+
+// ── Claude API call ───────────────────────────────────────────────────────────
+async function callClaude(messages, system){
+  const key = getApiKey();
+  if (!key){ openApiModal(); throw new Error('NO_KEY'); }
+
+  const res = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': key,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-calls': 'true'
+    },
+    body: JSON.stringify({ model:'claude-sonnet-4-20250514', max_tokens:1000, system, messages })
+  });
+
+  if (!res.ok){
+    const body = await res.json().catch(() => ({}));
+    if (res.status === 401) { openApiModal(); throw new Error('INVALID_KEY'); }
+    throw new Error(body.error?.message || `API error ${res.status}`);
+  }
+  const data = await res.json();
+  return data.content.map(b => b.text || '').join('');
+}
+
+function showError(elId, msg){ const el = document.getElementById(elId); if(el){ el.textContent = msg; el.style.display = 'block'; } }
+function hideError(elId){ const el = document.getElementById(elId); if(el) el.style.display = 'none'; }
+
+// ── Tab navigation ────────────────────────────────────────────────────────────
+function switchTab(name, btn){
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('panel-' + name).classList.add('active');
+  btn.classList.add('active');
+  document.getElementById('main-scroll').scrollTop = 0;
+  if (name === 'chart') initMap();
+}
+
+// ── Fish Identifier ───────────────────────────────────────────────────────────
+let fishB64 = null, fishMime = 'image/jpeg';
+
+document.getElementById('fish-file').addEventListener('change', function(e){
+  const file = e.target.files[0];
+  if (!file) return;
+  fishMime = file.type || 'image/jpeg';
+  const reader = new FileReader();
+  reader.onload = ev => {
+    fishB64 = ev.target.result.split(',')[1];
+    document.getElementById('fish-preview').src = ev.target.result;
+    document.getElementById('fish-preview').style.display = 'block';
+    document.getElementById('upload-zone').style.display = 'none';
+    document.getElementById('retake-btn').style.display = 'flex';
+    document.getElementById('identify-btn').style.display = 'flex';
+    document.getElementById('identify-result').style.display = 'none';
+    hideError('identify-error');
+  };
+  reader.readAsDataURL(file);
+});
+
+function resetPhoto(){
+  fishB64 = null;
+  document.getElementById('fish-preview').style.display = 'none';
+  document.getElementById('upload-zone').style.display = 'block';
+  document.getElementById('retake-btn').style.display = 'none';
+  document.getElementById('identify-btn').style.display = 'none';
+  document.getElementById('identify-result').style.display = 'none';
+  document.getElementById('fish-file').value = '';
+  hideError('identify-error');
+}
+
+async function identifyFish(){
+  if (!fishB64) return;
+  const btn = document.getElementById('identify-btn');
+  const loading = document.getElementById('identify-loading');
+  const result = document.getElementById('identify-result');
+  btn.disabled = true; loading.style.display = 'flex';
+  result.style.display = 'none'; hideError('identify-error');
+  try {
+    const text = await callClaude([{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: fishMime, data: fishB64 } },
+        { type: 'text', text: 'Identify this fish. Give: 1) Common & scientific name, 2) Key ID features you can see, 3) Typical habitat, 4) Best fishing techniques for this species, 5) Any size/catch regulations to be aware of. Be concise and practical.' }
+      ]
+    }], 'You are an expert ichthyologist and fishing guide. Provide accurate, practical fish identification and fishing advice.');
+    document.getElementById('identify-text').textContent = text;
+    result.style.display = 'block';
+  } catch(err) {
+    if (err.message !== 'NO_KEY' && err.message !== 'INVALID_KEY')
+      showError('identify-error', '⚠️ ' + err.message + '\n\nMake sure your API key is correct and you have internet access.');
+  }
+  btn.disabled = false; loading.style.display = 'none';
+}
+
+// ── Spot Finder ───────────────────────────────────────────────────────────────
+async function findSpots(){
+  const loc = document.getElementById('spot-location').value.trim();
+  if (!loc){ showError('spots-error','⚠️ Please enter a location first.'); return; }
+  const species = document.getElementById('spot-species').value;
+  const btn = document.getElementById('spots-btn');
+  const loading = document.getElementById('spots-loading');
+  const result = document.getElementById('spots-result');
+  btn.disabled = true; loading.style.display = 'flex';
+  result.style.display = 'none'; hideError('spots-error');
+  try {
+    const text = await callClaude([{
+      role: 'user',
+      content: `I'm fishing near ${loc}. Target: ${species === 'any' ? 'any species' : species}. Give: 1) Top 3 specific spots with descriptions, 2) Best techniques & rigs, 3) Best times of day, 4) Local bait/lure recommendations, 5) One pro tip specific to this area.`
+    }], 'You are a seasoned fishing guide with deep knowledge of fishing spots worldwide. Give specific, practical, location-accurate advice.');
+    document.getElementById('spots-text').textContent = text;
+    result.style.display = 'block';
+  } catch(err) {
+    if (err.message !== 'NO_KEY' && err.message !== 'INVALID_KEY')
+      showError('spots-error', '⚠️ ' + err.message);
+  }
+  btn.disabled = false; loading.style.display = 'none';
+}
+document.getElementById('spot-location').addEventListener('keydown', e => { if(e.key==='Enter') findSpots(); });
+
+// ── Map / GPS ─────────────────────────────────────────────────────────────────
+let mapReady=false, map, bases={}, navLayer=null;
+let gpsWatch=null, gpsMarker=null, gpsCircle=null;
+let gpsStatus='idle', gpsLatLng=null;
+let wpCount=1, waypoints=[], wpMarkers={};
+
+function initMap(){
+  if (mapReady) return;
+  mapReady = true;
+  map = L.map('fishing-map', { center:[37.5,-96], zoom:4 });
+
+  bases.osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19});
+  bases.satellite = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{attribution:'© Esri',maxZoom:19});
+  bases.seamap = L.tileLayer('https://tiles.openseamap.org/seamark/{z}/{x}/{y}.png',{attribution:'© OpenSeaMap',maxZoom:18,opacity:0.9});
+  bases.depth = L.tileLayer('https://tiles.openseamap.org/depth/{z}/{x}/{y}.png',{attribution:'© OpenSeaMap',maxZoom:18,opacity:0.75});
+
+  bases.osm.addTo(map);
+  bases.seamap.addTo(map);
+
+  // Plot saved catches
+  getCatches().forEach(c => {
+    if (!c.lat || !c.lng) return;
+    const icon = L.divIcon({html:`<div class="fish-pin" style="background:rgba(94,168,195,0.92);border:2px solid #fff;width:28px;height:28px;font-size:14px">🎣</div>`,className:'',iconSize:[28,28],iconAnchor:[14,14]});
+    L.marker([c.lat,c.lng],{icon}).addTo(map).bindPopup(`<b>${c.fish}</b><br/>${c.weight} · ${c.location}`);
+  });
+
+  map.on('click', e => addWaypoint(e.latlng.lat, e.latlng.lng));
+  autoLocate();
+}
+
+function autoLocate(){
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    applyGpsFix(pos); startGpsWatch();
+  }, ()=>{}, {enableHighAccuracy:true, timeout:8000});
+}
+
+function toggleGps(){
+  if (gpsStatus==='idle'||gpsStatus==='denied') startGps(); else stopGps();
+}
+
+function startGps(){
+  if (!navigator.geolocation){ setGpsStatus('denied'); return; }
+  setGpsStatus('seeking');
+  navigator.geolocation.getCurrentPosition(pos=>{ applyGpsFix(pos); startGpsWatch(); },
+    err => setGpsStatus(err.code===1?'denied':'idle'),
+    {enableHighAccuracy:true, timeout:10000});
+}
+
+function startGpsWatch(){
+  if (gpsWatch) navigator.geolocation.clearWatch(gpsWatch);
+  gpsWatch = navigator.geolocation.watchPosition(applyGpsFix, ()=>{},
+    {enableHighAccuracy:true, maximumAge:5000, timeout:15000});
+}
+
+function applyGpsFix(pos){
+  const {latitude:lat, longitude:lng, accuracy} = pos.coords;
+  gpsLatLng = {lat, lng, accuracy};
+  setGpsStatus('live');
+  updateGpsMarker(lat, lng, accuracy);
+  if (map) map.setView([lat,lng], 13);
+}
+
+function stopGps(){
+  if (gpsWatch){ navigator.geolocation.clearWatch(gpsWatch); gpsWatch=null; }
+  if (gpsMarker && map){ map.removeLayer(gpsMarker); gpsMarker=null; }
+  if (gpsCircle && map){ map.removeLayer(gpsCircle); gpsCircle=null; }
+  gpsLatLng=null; setGpsStatus('idle');
+}
+
+function centerOnMe(){ if(gpsLatLng&&map) map.setView([gpsLatLng.lat,gpsLatLng.lng],15); }
+
+function setGpsStatus(s){
+  gpsStatus=s;
+  const dot=document.getElementById('gps-dot');
+  const lbl=document.getElementById('gps-label');
+  const mainBtn=document.getElementById('gps-main-btn');
+  const centerBtn=document.getElementById('gps-center-btn');
+  const coords=document.getElementById('gps-coords');
+  dot.className='gps-dot'+(s==='live'?' live':s==='seeking'?' seeking':'');
+  lbl.textContent={idle:'GPS · Not tracking',seeking:'GPS · Acquiring signal…',live:'GPS · Live tracking',denied:'GPS · Permission denied'}[s]||'GPS';
+  mainBtn.textContent=s==='live'?'Stop':s==='seeking'?'Locating…':'📡 Locate Me';
+  mainBtn.disabled=s==='denied';
+  centerBtn.style.display=s==='live'?'block':'none';
+  if(gpsLatLng&&s==='live'){
+    coords.textContent=`${gpsLatLng.lat.toFixed(5)}°, ${gpsLatLng.lng.toFixed(5)}° · ±${Math.round(gpsLatLng.accuracy)}m`;
+    coords.style.display='block';
+  } else { coords.style.display='none'; }
+}
+
+function updateGpsMarker(lat,lng,accuracy){
+  if(!map) return;
+  if(gpsMarker) map.removeLayer(gpsMarker);
+  if(gpsCircle) map.removeLayer(gpsCircle);
+  gpsCircle=L.circle([lat,lng],{radius:accuracy,color:'#4caf7d',fillColor:'#4caf7d',fillOpacity:0.07,weight:1.5,opacity:0.35}).addTo(map);
+  const icon=L.divIcon({html:'<div class="you-ring"></div>',className:'',iconSize:[20,20],iconAnchor:[10,10]});
+  gpsMarker=L.marker([lat,lng],{icon,zIndexOffset:1000}).addTo(map)
+    .bindPopup(`<b>📡 You are here</b><br/>${lat.toFixed(5)}°, ${lng.toFixed(5)}°<br/><i style="color:#5e7d96">±${Math.round(accuracy)}m</i>`);
+}
+
+function switchLayer(key,btn){
+  if(!map) return;
+  document.querySelectorAll('.layer-btn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  Object.entries(bases).forEach(([k,l])=>{ if(k!=='seamap'&&map.hasLayer(l)) map.removeLayer(l); });
+  if(navLayer&&map.hasLayer(navLayer)) map.removeLayer(navLayer);
+  if(key==='navionics'&&navLayer){ bases.satellite.addTo(map); navLayer.addTo(map); }
+  else if(key==='seamap'){ bases.osm.addTo(map); bases.seamap.addTo(map); }
+  else if(key==='depth'){ bases.osm.addTo(map); bases.depth.addTo(map); if(map.hasLayer(bases.seamap)) map.removeLayer(bases.seamap); }
+  else { bases[key].addTo(map); bases.seamap.addTo(map); }
+}
+
+function activateNavionics(){
+  const key=document.getElementById('nav-key-input').value.trim();
+  if(!key||!map) return;
+  if(navLayer) map.removeLayer(navLayer);
+  navLayer=L.tileLayer(`https://backend.navionics.io/tile/{z}/{x}/{y}?LAYERS=config_1_1_0&TRANSPARENT=TRUE&navkey=${key}`,{attribution:'© Navionics by Garmin',maxZoom:18,opacity:0.85});
+  Object.values(bases).forEach(l=>{if(map.hasLayer(l)) map.removeLayer(l);});
+  bases.satellite.addTo(map); navLayer.addTo(map);
+  document.getElementById('nav-setup').style.display='none';
+  document.getElementById('nav-active-msg').style.display='block';
+  document.getElementById('lbtn-navionics').style.display='block';
+}
+
+function addWaypoint(lat,lng){
+  if(!map) return;
+  const id=Date.now(), name=`WP-${String(wpCount++).padStart(2,'0')}`;
+  const icon=L.divIcon({html:'<div class="fish-pin" style="background:rgba(255,175,40,0.93);border:2px solid #fff;width:28px;height:28px;font-size:14px">📍</div>',className:'',iconSize:[28,28],iconAnchor:[14,14]});
+  const marker=L.marker([lat,lng],{icon}).addTo(map).bindPopup(`<b>${name}</b><br/>${lat.toFixed(5)}°, ${lng.toFixed(5)}°`);
+  wpMarkers[id]=marker;
+  waypoints.push({id,name,lat:lat.toFixed(5),lng:lng.toFixed(5)});
+  renderWaypoints();
+}
+
+function removeWaypoint(id){
+  if(map&&wpMarkers[id]){map.removeLayer(wpMarkers[id]);delete wpMarkers[id];}
+  waypoints=waypoints.filter(w=>w.id!==id); renderWaypoints();
+}
+
+function renderWaypoints(){
+  const list=document.getElementById('wp-list'), items=document.getElementById('wp-items');
+  if(!waypoints.length){list.style.display='none';return;}
+  list.style.display='block';
+  items.innerHTML=waypoints.map(wp=>`
+    <div class="wp-item">
+      <div><div class="wp-name">📍 ${wp.name}</div><div class="wp-pos">${wp.lat}°N · ${wp.lng}°</div></div>
+      <button class="wp-del" onclick="removeWaypoint(${wp.id})">✕</button>
+    </div>`).join('');
+}
+
+// ── Catch Log (persisted to localStorage) ────────────────────────────────────
+function getCatches(){ try{ return JSON.parse(localStorage.getItem('cc_catches')||'[]'); }catch(e){ return []; } }
+function saveCatches(arr){ localStorage.setItem('cc_catches', JSON.stringify(arr)); }
+
+function renderLog(){
+  const catches=getCatches();
+  document.getElementById('stat-total').textContent=catches.length;
+  document.getElementById('stat-species').textContent=new Set(catches.map(c=>c.fish)).size;
+  document.getElementById('stat-spots').textContent=new Set(catches.map(c=>c.location)).size;
+  document.getElementById('log-insights-section').style.display=catches.length>=2?'block':'none';
+  const list=document.getElementById('catch-list');
+  if(!catches.length){ list.innerHTML='<div class="empty"><div class="icon">🎣</div>No catches yet. Log your first!</div>'; return; }
+  list.innerHTML=catches.map(c=>`
+    <div class="card">
+      <div class="catch-top">
+        <div class="catch-fish">🎣 ${c.fish}</div>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="catch-w">${c.weight}</span>
+          <button class="del-btn" onclick="deleteCatch(${c.id})">✕</button>
+        </div>
+      </div>
+      <div class="catch-meta">📍 ${c.location} · 📅 ${c.date}</div>
+      ${c.notes?`<div class="catch-notes">"${c.notes}"</div>`:''}
+    </div>`).join('');
+}
+
+function toggleLogForm(){
+  const form=document.getElementById('log-form'), btn=document.getElementById('log-form-toggle');
+  const open=form.style.display==='none';
+  form.style.display=open?'block':'none';
+  btn.textContent=open?'✕ Cancel':'+ Log a Catch';
+}
+
+function saveCatch(){
+  const fish=document.getElementById('lf-fish').value.trim();
+  if(!fish) return;
+  const catches=getCatches();
+  catches.unshift({
+    id:Date.now(), fish,
+    weight:document.getElementById('lf-weight').value||'—',
+    location:document.getElementById('lf-loc').value||'Unknown',
+    date:new Date().toISOString().split('T')[0],
+    notes:document.getElementById('lf-notes').value
+  });
+  saveCatches(catches);
+  ['lf-fish','lf-weight','lf-loc','lf-notes'].forEach(id=>document.getElementById(id).value='');
+  toggleLogForm(); renderLog();
+}
+
+function deleteCatch(id){
+  saveCatches(getCatches().filter(c=>c.id!==id)); renderLog();
+}
+
+async function getLogInsights(){
+  const catches=getCatches();
+  const btn=document.querySelector('#log-insights-section .btn-primary');
+  const loading=document.getElementById('insights-loading');
+  const result=document.getElementById('insights-result');
+  btn.disabled=true; loading.style.display='flex'; result.style.display='none'; hideError('insights-error');
+  const summary=catches.map(c=>`${c.fish} (${c.weight}) at ${c.location} on ${c.date}`).join('; ');
+  try{
+    const text=await callClaude([{role:'user',content:`My fishing log: ${summary}. Analyze: 1) Most successful patterns, 2) Species diversity, 3) Location trends, 4) Tips to improve my catch rate.`}],
+      'You are an expert fishing analyst and coach. Be encouraging and specific.');
+    document.getElementById('insights-text').textContent=text; result.style.display='block';
+  } catch(err){
+    if(err.message!=='NO_KEY'&&err.message!=='INVALID_KEY') showError('insights-error','⚠️ '+err.message);
+  }
+  btn.disabled=false; loading.style.display='none';
+}
+
+// ── Conditions ────────────────────────────────────────────────────────────────
+async function getCondTips(){
+  const btn=document.querySelector('#panel-conditions .btn-primary');
+  const loading=document.getElementById('cond-loading');
+  const result=document.getElementById('cond-result');
+  btn.disabled=true; loading.style.display='flex'; result.style.display='none'; hideError('cond-error');
+  const desc=[
+    `Season: ${document.getElementById('cond-season').value}`,
+    `Time: ${document.getElementById('cond-time').value}`,
+    `Weather: ${document.getElementById('cond-weather').value}`,
+    `Wind: ${document.getElementById('cond-wind').value}`,
+    `Water clarity: ${document.getElementById('cond-clarity').value}`,
+    `Temp: ${document.getElementById('cond-temp').value||'unknown'}°F`
+  ].join(', ');
+  try{
+    const text=await callClaude([{role:'user',content:`Current fishing conditions: ${desc}. Give: 1) How these conditions affect fish behavior, 2) Best species to target right now, 3) Optimal depth and structure to fish, 4) Recommended lures/bait for these conditions, 5) One pro tip specific to these conditions.`}],
+      'You are a professional fishing guide who excels at reading conditions. Give precise, actionable advice.');
+    document.getElementById('cond-text').textContent=text; result.style.display='block';
+  } catch(err){
+    if(err.message!=='NO_KEY'&&err.message!=='INVALID_KEY') showError('cond-error','⚠️ '+err.message+'\n\nCheck your API key and internet connection.');
+  }
+  btn.disabled=false; loading.style.display='none';
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+renderLog();
+if (!getApiKey()) setTimeout(openApiModal, 600);
+</script>
+</body>
+</html>
